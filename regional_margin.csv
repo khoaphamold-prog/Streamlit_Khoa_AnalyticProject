@@ -1,0 +1,14 @@
+Region,Category,Total_Sales,Total_Profit,Profit_Margin_Pct,Avg_Discount_Pct
+Central,Furniture,592433.8,-16329.2,-2.76,29.41
+East,Furniture,779097.31,273.49,0.04,15.3
+South,Furniture,426253.16,22691.1,5.32,12.04
+West,Furniture,893016.18,32829.14,3.68,13.34
+Central,Office Supplies,624501.38,44012.7,7.05,25.33
+East,Office Supplies,749730.91,141462.67,18.87,14.55
+South,Office Supplies,466326.8,87754.33,18.82,16.12
+West,Office Supplies,813527.35,191930.56,23.59,9.53
+Central,Technology,611921.24,134151.57,21.92,13.04
+East,Technology,1063930.8,189626.93,17.82,14.71
+South,Technology,562914.86,60930.05,10.82,10.89
+West,Technology,917746.06,150450.86,16.39,13.18
+West,,,,,
