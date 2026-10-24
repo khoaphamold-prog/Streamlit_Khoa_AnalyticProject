@@ -3,15 +3,112 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# 1. Cấu hình trang
+import os
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+# ---------------------------------------------------------
+# 1. CẤU HÌNH TRANG & GIAO DIỆN TƯƠI TRẺ (E-COMMERCE THEME)
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="Superstore Executive Dashboard",
-    page_icon="📊",
+    page_icon="🛍️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.title("📊 Superstore Business Analytics Dashboard")
+# Bảng màu Plotly tươi trẻ dành cho E-commerce
+PALETTE = ["#FF6B6B", "#6C5CE7", "#00CEC9", "#FFA502", "#00B894", "#E84393"]
+px.defaults.color_discrete_sequence = PALETTE
+
+# CSS Custom cho Streamlit Background & UI elements
+st.markdown(
+    """
+    <style>
+    /* 1. Nền chính của toàn bộ App (Gradient nhạt tươi sáng) */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* 2. Styling cho Thanh bên (Sidebar) */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e1e2f 0%, #11111d 100%);
+        color: #ffffff;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e0e0e0 !important;
+    }
+
+    /* 3. Tiêu đề Dashboard chính */
+    h1 {
+        background: linear-gradient(90deg, #ff6b6b, #6c5ce7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800 !important;
+    }
+
+    /* 4. Thẻ KPI (Metrics) tươi trẻ với viền Gradient */
+    [data-testid="stMetric"] {
+        background: #ffffff;
+        padding: 16px 20px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(108, 92, 231, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-left: 6px solid #ff6b6b;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 30px rgba(108, 92, 231, 0.15);
+    }
+    [data-testid="stMetricLabel"] {
+        color: #636e72 !important;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    [data-testid="stMetricValue"] {
+        color: #2d3436 !important;
+        font-weight: 700;
+    }
+
+    /* 5. Định dạng các Tabs thành nút hình viên thuốc (Pill Tabs) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background-color: rgba(255, 255, 255, 0.6);
+        padding: 8px;
+        border-radius: 14px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
+        border-radius: 10px;
+        color: #636e72;
+        font-weight: 600;
+        border: none !important;
+        padding: 0 20px;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(90deg, #ff6b6b 0%, #ff8e53 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.35);
+    }
+
+    /* 6. Hộp thông tin st.info */
+    .stAlert {
+        border-radius: 12px;
+        background-color: #ffffff;
+        border-left: 5px solid #00cec9;
+        box-shadow: 0 4px 15px rgba(0, 206, 201, 0.1);
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+st.title("🛍️ Superstore Business Analytics Dashboard")
 st.caption("Bảng điều hành quản trị: Tài chính, Chiết khấu, Khách hàng & Vận hành")
 
 # 2. Xác định đường dẫn file CSV
