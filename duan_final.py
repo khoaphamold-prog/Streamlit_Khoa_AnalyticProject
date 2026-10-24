@@ -363,68 +363,154 @@ with tab3:
             st.dataframe(df_rfm.head(10), use_container_width=True)
 
 # ---------------------------------------------------------
-# TAB 4: VẬN HÀNH & XU HƯỚNG MÙA VỤ
-# ---------------------------------------------------------
+# TAB 4: VẬN HÀNH & XU HƯỚNG THỜI GIAN 
+# =========================================================
 with tab4:
-    st.subheader("4. Vận Hành & Chuỗi Cung Ứng")
+    st.subheader("4. Vận Hành & Biến Động Theo Thời Gian")
 
-    # Biểu đồ xu hướng doanh thu / lợi nhuận theo tháng
+    # -----------------------------------------------------
+    # 1. Biểu đồ Xu hướng Doanh thu & Lợi nhuận theo Tháng
+    # -----------------------------------------------------
     if not df_monthly.empty:
-        df_month_plot = df_monthly.copy()
-        time_col = df_month_plot.columns[0]
-        
-        # 1. Làm sạch dữ liệu và chuyển về dạng số
-        for col in df_month_plot.columns:
-            if col != time_col:
-                if df_month_plot[col].dtype == 'object':
-                    df_month_plot[col] = (
-                        df_month_plot[col]
-                        .astype(str)
-                        .str.replace('$', '', regex=False)
-                        .str.replace(',', '', regex=False)
-                    )
-                df_month_plot[col] = pd.to_numeric(df_month_plot[col], errors='coerce')
-        
-        # 2. Chỉ lọc ra các cột kiểu số để truyền vào y
-        value_cols = df_month_plot.select_dtypes(include=['number']).columns.tolist()
-        
-        if value_cols:
-            fig_month = px.line(
-                df_month_plot,
-                x=time_col,
-                y=value_cols,
-                title="Xu Hướng Biến Động Doanh Thu & Lợi Nhuận Theo Tháng",
-                markers=True,
-                labels={time_col: "Thời Gian", "value": "Giá Trị ($)", "variable": "Chỉ Số"}
+        df_month_clean = df_monthly.copy()
+
+        # Tạo cột chuỗi thời gian chuẩn YYYY-MM cho Trục X
+        if "Year" in df_month_clean.columns and "Month" in df_month_clean.columns:
+            df_month_clean["Period"] = (
+                df_month_clean["Year"].astype(str)
+                + "-"
+                + df_month_clean["Month"].astype(int).astype(str).str.zfill(2)
             )
-            fig_month.update_layout(margin=dict(t=40, b=20))
+        elif "Year_Month" in df_month_clean.columns:
+            df_month_clean["Period"] = df_month_clean["Year_Month"].astype(str)
+        elif "Order Date" in df_month_clean.columns:
+            df_month_clean["Period"] = pd.to_datetime(
+                df_month_clean["Order Date"]
+            ).dt.strftime("%Y-%m")
+        else:
+            df_month_clean["Period"] = df_month_clean.iloc[:, 0].astype(str)
+
+        # Sắp xếp thời gian tăng dần từ quá khứ đến hiện tại
+        df_month_clean = df_month_clean.sort_values(by="Period")
+
+        # Làm sạch dữ liệu số (xóa bỏ $, phẩy và chuyển sang kiểu float)
+        for col in ["Total_Sales", "Total_Profit", "Sales", "Profit"]:
+            if col in df_month_clean.columns:
+                if df_month_clean[col].dtype == "object":
+                    df_month_clean[col] = (
+                        df_month_clean[col]
+                        .astype(str)
+                        .str.replace("$", "", regex=False)
+                        .str.replace(",", "", regex=False)
+                    )
+                df_month_clean[col] = pd.to_numeric(
+                    df_month_clean[col], errors="coerce"
+                )
+
+        # Chỉ lọc đúng các cột tài chính có kiểu số để truyền vào y
+        target_cols = [
+            c
+            for c in ["Total_Sales", "Total_Profit", "Sales", "Profit"]
+            if c in df_month_clean.columns
+        ]
+
+        if target_cols:
+            fig_month = px.line(
+                df_month_clean,
+                x="Period",
+                y=target_cols,
+                title="📈 Xu Hướng Doanh Thu & Lợi Nhuận Theo Tháng (Timeline Liên Tục)",
+                markers=True,
+                labels={
+                    "Period": "Thời Gian (Năm-Tháng)",
+                    "value": "Giá Trị ($)",
+                    "variable": "Chỉ Số",
+                },
+                color_discrete_map={
+                    "Total_Sales": "#6C5CE7",
+                    "Sales": "#6C5CE7",
+                    "Total_Profit": "#00CEC9",
+                    "Profit": "#00CEC9",
+                },
+            )
+            # Ép trục X dạng category để hiển thị đều từng tháng và xoay nhãn 45 độ
+            fig_month.update_xaxes(type="category", tickangle=-45)
+            fig_month.update_layout(
+                margin=dict(t=50, b=30, l=10, r=10),
+                hovermode="x unified",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                ),
+            )
             st.plotly_chart(fig_month, use_container_width=True)
+        else:
+            st.warning(
+                "⚠️ Không tìm thấy các cột chỉ số Doanh Thu/Lợi Nhuận dạng số trong file monthly_trend.csv!"
+            )
+    else:
+        st.info("💡 Chưa có dữ liệu xu hướng tháng (monthly_trend.csv).")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        fig_ship_time = px.bar(
-            df_ship,
-            x="Ship Mode",
-            y="Avg_Lead_Time_Days",
-            color="Ship Mode",
-            title="Thời Gian Giao Hàng Trung Bình (Ngày)",
-            labels={"Avg_Lead_Time_Days": "Số Ngày Giao", "Ship Mode": "Hình Thức Vận Chuyển"},
-        )
-        fig_ship_time.update_layout(margin=dict(t=40, b=20), showlegend=False)
-        st.plotly_chart(fig_ship_time, use_container_width=True)
+    st.markdown("---")
 
-    with c2:
-        fig_ship_margin = px.bar(
-            df_ship,
-            x="Ship Mode",
-            y="Profit_Margin_Pct",
-            color="Profit_Margin_Pct",
-            title="Biên Lợi Nhuận Theo Hình Thức Vận Chuyển",
-            color_continuous_scale="Tealgrn",
-            labels={"Profit_Margin_Pct": "Biên Lợi Nhuận (%)", "Ship Mode": "Hình Thức Vận Chuyển"},
-        )
-        fig_ship_margin.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig_ship_margin, use_container_width=True)
+    # -----------------------------------------------------
+    # 2. Phân tích Vận hành & Phương thức Giao hàng
+    # -----------------------------------------------------
+    if not df_ship.empty:
+        c1, c2 = st.columns(2)
+
+        # Biểu đồ 1: Thời gian giao hàng trung bình
+        with c1:
+            y_lead = (
+                "Avg_Lead_Time_Days"
+                if "Avg_Lead_Time_Days" in df_ship.columns
+                else df_ship.select_dtypes(include=["number"]).columns[0]
+            )
+            fig_ship_time = px.bar(
+                df_ship,
+                x="Ship Mode",
+                y=y_lead,
+                color="Ship Mode",
+                title="🚚 Thời Gian Giao Hàng Trung Bình (Ngày)",
+                labels={
+                    y_lead: "Số Ngày Giao TB",
+                    "Ship Mode": "Hình Thức Vận Chuyển",
+                },
+                text_auto=".1f",
+            )
+            fig_ship_time.update_layout(
+                margin=dict(t=40, b=20, l=10, r=10), showlegend=False
+            )
+            st.plotly_chart(fig_ship_time, use_container_width=True)
+
+        # Biểu đồ 2: Biên lợi nhuận theo phương thức vận chuyển
+        with c2:
+            y_margin = (
+                "Profit_Margin_Pct"
+                if "Profit_Margin_Pct" in df_ship.columns
+                else df_ship.select_dtypes(include=["number"]).columns[-1]
+            )
+            fig_ship_margin = px.bar(
+                df_ship,
+                x="Ship Mode",
+                y=y_margin,
+                color=y_margin,
+                title="💎 Biên Lợi Nhuận (%) Theo Hình Thức Vận Chuyển",
+                color_continuous_scale="Tealgrn",
+                labels={
+                    y_margin: "Biên LN (%)",
+                    "Ship Mode": "Hình Thức Vận Chuyển",
+                },
+                text_auto=".1f",
+            )
+            fig_ship_margin.update_layout(margin=dict(t=40, b=20, l=10, r=10))
+            st.plotly_chart(fig_ship_margin, use_container_width=True)
+    else:
+        st.info("💡 Chưa có dữ liệu phân tích vận chuyển (shipping_analysis.csv).")
+
 
 
 # ---------------------------------------------------------
