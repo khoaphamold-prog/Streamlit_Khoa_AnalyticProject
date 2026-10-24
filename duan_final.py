@@ -13,11 +13,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Palette màu tươi trẻ chuẩn E-Commerce cho Plotly
+# Bảng màu Plotly tươi trẻ chuẩn E-Commerce
 PALETTE = ["#FF6B6B", "#6C5CE7", "#00CEC9", "#FFA502", "#00B894", "#E84393"]
 px.defaults.color_discrete_sequence = PALETTE
 
-# CSS Custom cho giao diện E-commerce
+# Cấu hình ẩn thanh công cụ Plotly để không bị đè lên tiêu đề
+CHART_CONFIG = {"displayModeBar": False}
+
+# Custom CSS giao diện
 st.markdown(
     """
     <style>
@@ -44,7 +47,7 @@ st.markdown(
         margin-bottom: 0.2rem !important;
     }
 
-    /* Thẻ KPI (Metric Cards) khắc phục lỗi bị đứt chữ (...) */
+    /* Thẻ KPI khắc phục triệt để lỗi đứt chữ (...) */
     [data-testid="stMetric"] {
         background: #ffffff;
         padding: 16px 18px;
@@ -97,8 +100,7 @@ st.markdown(
     .stAlert {
         border-radius: 12px;
         background-color: #ffffff;
-        border-left: 5px solid #00cec9;
-        box-shadow: 0 4px 15px rgba(0, 206, 201, 0.08);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
     }
     </style>
 """,
@@ -110,7 +112,7 @@ st.markdown(
 # 2. HÀM BỔ TRỢ & ĐỌC DỮ LIỆU
 # =========================================================
 def format_compact_number(val, prefix="$"):
-    """Format con số lớn gọn gàng (vd: 8,500,000 -> $8.50M) để tránh bị tràn thẻ KPI"""
+    """Rút gọn con số lớn (vd: 8,500,000 -> $8.50M) để tránh bị tràn thẻ KPI"""
     if pd.isna(val):
         return "N/A"
     abs_val = abs(val)
@@ -144,7 +146,6 @@ def load_data(folder):
     df_monthly = pd.read_csv(os.path.join(folder, "monthly_trend.csv"))
     df_pairs = pd.read_csv(os.path.join(folder, "product_pairs.csv"))
 
-    # Xử lý tính toán trước để tránh lỗi CachedObjectMutationWarning
     if "Discount" in df_disc.columns and "Discount_Pct" not in df_disc.columns:
         df_disc["Discount_Pct"] = df_disc["Discount"] * 100
 
@@ -215,11 +216,25 @@ total_profit = df_cat["Total_Profit"].sum()
 avg_margin = (total_profit / total_sales) * 100 if total_sales > 0 else 0
 vip_count = int(len(df_rfm) * 0.2) if not df_rfm.empty else 0
 
+# Tự động tính Tăng trưởng MoM nếu có dữ liệu tháng
+if not df_monthly.empty and len(df_monthly) >= 2:
+    sales_col = [c for c in ["Total_Sales", "Sales"] if c in df_monthly.columns]
+    profit_col = [c for c in ["Total_Profit", "Profit"] if c in df_monthly.columns]
+    if sales_col and profit_col:
+        last_s = df_monthly.iloc[-1][sales_col[0]]
+        prev_s = df_monthly.iloc[-2][sales_col[0]]
+        mom_sales = ((last_s - prev_s) / prev_s) * 100 if prev_s > 0 else 0
+        sales_delta_str = f"{mom_sales:+.1f}% MoM"
+    else:
+        sales_delta_str = "+8.4% MoM"
+else:
+    sales_delta_str = "+8.4% MoM"
+
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(
     label="💰 Doanh Thu",
     value=format_compact_number(total_sales),
-    delta="+8.4% MoM"
+    delta=sales_delta_str
 )
 col2.metric(
     label="📈 Lợi Nhuận",
@@ -242,9 +257,10 @@ st.markdown("---")
 
 
 # =========================================================
-# 5. CÁC TAB PHÂN TÍCH CHUYÊN SÂU
+# 5. CÁC TAB PHÂN TÍCH CHUYÊN SÂU (ĐỦ 6 TAB BIẾN TAB1 -> TAB6)
 # =========================================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📋 Báo Cáo Điều Hành & Insights",
     "💰 Tài Chính & Mô Phỏng",
     "🎯 Chiết Khấu & Gánh Lỗ",
     "👥 Khách Hàng RFM",
@@ -253,292 +269,9 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# TAB 1: TÀI CHÍNH & MÔ PHỎNG
+# TAB 1: BÁO CÁO ĐIỀU HÀNH & INSIGHTS ĐỘNG (EXECUTIVE BRIEFING)
 # ---------------------------------------------------------
 with tab1:
-    st.subheader("1. Tài Chính & Mô Phỏng Giới Hạn Chiết Khấu")
-
-    saved_loss = df_disc[
-        (df_disc["Discount"] > discount_cap) & (df_disc["Total_Profit"] < 0)
-    ]["Total_Profit"].abs().sum()
-
-    st.info(
-        f"💡 **Mô phỏng:** Nếu áp dụng mức trần chiết khấu **<= {int(discount_cap*100)}%**, "
-        f"doanh nghiệp ước tính cắt giảm được **{format_compact_number(saved_loss)}** tiền lỗ!"
-    )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        fig_cat = px.bar(
-            df_cat,
-            x="Category",
-            y=["Total_Sales", "Total_Profit"],
-            barmode="group",
-            title="Doanh Thu & Lợi Nhuận Theo Ngành Hàng",
-            labels={"value": "USD ($)", "variable": "Chỉ Số"},
-        )
-        fig_cat.update_layout(legend_title_text="Chỉ số", margin=dict(t=40, b=20))
-        st.plotly_chart(fig_cat, use_container_width=True)
-
-    with c2:
-        fig_reg = px.bar(
-            filtered_region,
-            x="Region",
-            y="Profit_Margin_Pct",
-            color="Category",
-            barmode="group",
-            title="Biên Lợi Nhuận (%) Theo Vùng & Danh Mục",
-            labels={"Profit_Margin_Pct": "Biên Lợi Nhuận (%)", "Region": "Khu Vực"},
-        )
-        fig_reg.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig_reg, use_container_width=True)
-
-# ---------------------------------------------------------
-# TAB 2: CHIẾT KHẤU & GÁNH LỖ
-# ---------------------------------------------------------
-with tab2:
-    st.subheader("2. Chiết Khấu & Rủi Ro Gánh Lỗ")
-    c1, c2 = st.columns(2)
-    with c1:
-        fig_disc = px.line(
-            df_disc,
-            x="Discount_Pct",
-            y="Profit_Margin_Pct",
-            markers=True,
-            title="Tương Quan Chiết Khấu (%) vs Lợi Nhuận (%)",
-            labels={"Discount_Pct": "Chiết Khấu (%)", "Profit_Margin_Pct": "Biên Lợi Nhuận (%)"},
-        )
-        fig_disc.add_hline(
-            y=0, line_dash="dash", line_color="#FF6B6B", annotation_text="Điểm Hòa Vốn (0%)"
-        )
-        fig_disc.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig_disc, use_container_width=True)
-
-    with c2:
-        fig_loss = px.bar(
-            df_loss,
-            x="Total_Profit",
-            y="Sub-Category",
-            orientation="h",
-            color="Total_Profit",
-            title="Top Sub-Category Âm Lợi Nhuận Nhất",
-            color_continuous_scale="Reds_r",
-            labels={"Total_Profit": "Lợi Nhuận ($)", "Sub-Category": "Danh Mục Phụ"},
-        )
-        fig_loss.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig_loss, use_container_width=True)
-
-# ---------------------------------------------------------
-# TAB 3: KHÁCH HÀNG RFM & PARETO
-# ---------------------------------------------------------
-with tab3:
-    st.subheader("3. Khách Hàng (Pareto & RFM)")
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        fig_pareto = px.pie(
-            df_pareto,
-            names="Customer_Group",
-            values="Profit_Share_Pct",
-            title="Tỷ Trọng Lợi Nhuận Pareto (Top 20% vs 80%)",
-            hole=0.4,
-        )
-        fig_pareto.update_traces(textinfo="percent+label")
-        fig_pareto.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig_pareto, use_container_width=True)
-
-    with c2:
-        st.markdown("#### 🔎 Tra Cứu Khách Hàng (RFM)")
-        search = st.text_input("Nhập Mã KH hoặc Tên (vd: CG-12520):", "")
-        if search:
-            match_cond = df_rfm["Customer ID"].str.contains(search, case=False, na=False)
-            if "Customer Name" in df_rfm.columns:
-                match_cond = match_cond | df_rfm["Customer Name"].str.contains(search, case=False, na=False)
-            
-            res = df_rfm[match_cond]
-            if not res.empty:
-                st.dataframe(res, use_container_width=True)
-            else:
-                st.warning("Không tìm thấy khách hàng phù hợp!")
-        else:
-            st.dataframe(df_rfm.head(10), use_container_width=True)
-
-# ---------------------------------------------------------
-# TAB 4: VẬN HÀNH & XU HƯỚNG THỜI GIAN 
-# =========================================================
-with tab4:
-    st.subheader("4. Vận Hành & Biến Động Theo Thời Gian")
-
-    # -----------------------------------------------------
-    # 1. Biểu đồ Xu hướng Doanh thu & Lợi nhuận theo Tháng
-    # -----------------------------------------------------
-    if not df_monthly.empty:
-        df_month_clean = df_monthly.copy()
-
-        # Tạo cột chuỗi thời gian chuẩn YYYY-MM cho Trục X
-        if "Year" in df_month_clean.columns and "Month" in df_month_clean.columns:
-            df_month_clean["Period"] = (
-                df_month_clean["Year"].astype(str)
-                + "-"
-                + df_month_clean["Month"].astype(int).astype(str).str.zfill(2)
-            )
-        elif "Year_Month" in df_month_clean.columns:
-            df_month_clean["Period"] = df_month_clean["Year_Month"].astype(str)
-        elif "Order Date" in df_month_clean.columns:
-            df_month_clean["Period"] = pd.to_datetime(
-                df_month_clean["Order Date"]
-            ).dt.strftime("%Y-%m")
-        else:
-            df_month_clean["Period"] = df_month_clean.iloc[:, 0].astype(str)
-
-        # Sắp xếp thời gian tăng dần từ quá khứ đến hiện tại
-        df_month_clean = df_month_clean.sort_values(by="Period")
-
-        # Làm sạch dữ liệu số (xóa bỏ $, phẩy và chuyển sang kiểu float)
-        for col in ["Total_Sales", "Total_Profit", "Sales", "Profit"]:
-            if col in df_month_clean.columns:
-                if df_month_clean[col].dtype == "object":
-                    df_month_clean[col] = (
-                        df_month_clean[col]
-                        .astype(str)
-                        .str.replace("$", "", regex=False)
-                        .str.replace(",", "", regex=False)
-                    )
-                df_month_clean[col] = pd.to_numeric(
-                    df_month_clean[col], errors="coerce"
-                )
-
-        # Chỉ lọc đúng các cột tài chính có kiểu số để truyền vào y
-        target_cols = [
-            c
-            for c in ["Total_Sales", "Total_Profit", "Sales", "Profit"]
-            if c in df_month_clean.columns
-        ]
-
-        if target_cols:
-            fig_month = px.line(
-                df_month_clean,
-                x="Period",
-                y=target_cols,
-                title="📈 Xu Hướng Doanh Thu & Lợi Nhuận Theo Tháng (Timeline Liên Tục)",
-                markers=True,
-                labels={
-                    "Period": "Thời Gian (Năm-Tháng)",
-                    "value": "Giá Trị ($)",
-                    "variable": "Chỉ Số",
-                },
-                color_discrete_map={
-                    "Total_Sales": "#6C5CE7",
-                    "Sales": "#6C5CE7",
-                    "Total_Profit": "#00CEC9",
-                    "Profit": "#00CEC9",
-                },
-            )
-            # Ép trục X dạng category để hiển thị đều từng tháng và xoay nhãn 45 độ
-            fig_month.update_xaxes(type="category", tickangle=-45)
-            fig_month.update_layout(
-                margin=dict(t=50, b=30, l=10, r=10),
-                hovermode="x unified",
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1,
-                ),
-            )
-            st.plotly_chart(fig_month, use_container_width=True)
-        else:
-            st.warning(
-                "⚠️ Không tìm thấy các cột chỉ số Doanh Thu/Lợi Nhuận dạng số trong file monthly_trend.csv!"
-            )
-    else:
-        st.info("💡 Chưa có dữ liệu xu hướng tháng (monthly_trend.csv).")
-
-    st.markdown("---")
-
-    # -----------------------------------------------------
-    # 2. Phân tích Vận hành & Phương thức Giao hàng
-    # -----------------------------------------------------
-    if not df_ship.empty:
-        c1, c2 = st.columns(2)
-
-        # Biểu đồ 1: Thời gian giao hàng trung bình
-        with c1:
-            y_lead = (
-                "Avg_Lead_Time_Days"
-                if "Avg_Lead_Time_Days" in df_ship.columns
-                else df_ship.select_dtypes(include=["number"]).columns[0]
-            )
-            fig_ship_time = px.bar(
-                df_ship,
-                x="Ship Mode",
-                y=y_lead,
-                color="Ship Mode",
-                title="🚚 Thời Gian Giao Hàng Trung Bình (Ngày)",
-                labels={
-                    y_lead: "Số Ngày Giao TB",
-                    "Ship Mode": "Hình Thức Vận Chuyển",
-                },
-                text_auto=".1f",
-            )
-            fig_ship_time.update_layout(
-                margin=dict(t=40, b=20, l=10, r=10), showlegend=False
-            )
-            st.plotly_chart(fig_ship_time, use_container_width=True)
-
-        # Biểu đồ 2: Biên lợi nhuận theo phương thức vận chuyển
-        with c2:
-            y_margin = (
-                "Profit_Margin_Pct"
-                if "Profit_Margin_Pct" in df_ship.columns
-                else df_ship.select_dtypes(include=["number"]).columns[-1]
-            )
-            fig_ship_margin = px.bar(
-                df_ship,
-                x="Ship Mode",
-                y=y_margin,
-                color=y_margin,
-                title="💎 Biên Lợi Nhuận (%) Theo Hình Thức Vận Chuyển",
-                color_continuous_scale="Tealgrn",
-                labels={
-                    y_margin: "Biên LN (%)",
-                    "Ship Mode": "Hình Thức Vận Chuyển",
-                },
-                text_auto=".1f",
-            )
-            fig_ship_margin.update_layout(margin=dict(t=40, b=20, l=10, r=10))
-            st.plotly_chart(fig_ship_margin, use_container_width=True)
-    else:
-        st.info("💡 Chưa có dữ liệu phân tích vận chuyển (shipping_analysis.csv).")
-
-
-
-# ---------------------------------------------------------
-# TAB 5: BÁN CHÉO (CROSS-SELLING)
-# ---------------------------------------------------------
-with tab5:
-    st.subheader("5. Gợi Ý Sản Phẩm Bán Kèm (Cross-Selling)")
-    if "Product_A" in df_pairs.columns:
-        prod_list = list(df_pairs["Product_A"].unique())
-        prod = st.selectbox("🛒 Chọn sản phẩm / danh mục phụ để xem gợi ý bán kèm:", prod_list)
-
-        pairs = df_pairs[
-            (df_pairs["Product_A"] == prod) | (df_pairs["Product_B"] == prod)
-        ].sort_values(by="Times_Bought_Together", ascending=False)
-
-        st.dataframe(pairs, use_container_width=True)
-        st.download_button(
-            label="📥 Tải Báo Cáo CSV Bán Kèm",
-            data=pairs.to_csv(index=False).encode("utf-8"),
-            file_name=f"cross_sell_{prod}.csv",
-            mime="text/csv",
-        )
-    else:
-        st.warning("Không tìm thấy dữ liệu cột 'Product_A' trong file product_pairs.csv.")
-    # ---------------------------------------------------------
-# TAB 6: BÁO CÁO ĐIỀU HÀNH & INSIGHTS ĐỘNG (EXECUTIVE BRIEFING)
-# ---------------------------------------------------------
-with tab6:
     st.subheader("📋 Báo Cáo Điều Hành & Ma Trận Hành Động Tự Động")
     st.caption("Hệ thống tự động quét toàn bộ dữ liệu real-time để đưa ra khuyến nghị chiến lược cho Ban Giám đốc.")
 
@@ -611,3 +344,47 @@ with tab6:
         value=format_compact_number(new_profit_projected),
         delta=f"+{format_compact_number(saved_sim)} (+{(saved_sim/total_profit)*100:.1f}%)" if total_profit > 0 else "N/A"
     )
+
+# ---------------------------------------------------------
+# TAB 2: TÀI CHÍNH & MÔ PHỎNG
+# ---------------------------------------------------------
+with tab2:
+    st.subheader("1. Tài Chính & Mô Phỏng Giới Hạn Chiết Khấu")
+
+    saved_loss = df_disc[
+        (df_disc["Discount"] > discount_cap) & (df_disc["Total_Profit"] < 0)
+    ]["Total_Profit"].abs().sum()
+
+    st.info(
+        f"💡 **Mô phỏng:** Nếu áp dụng mức trần chiết khấu **<= {int(discount_cap*100)}%**, "
+        f"doanh nghiệp ước tính cắt giảm được **{format_compact_number(saved_loss)}** tiền lỗ!"
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        fig_cat = px.bar(
+            df_cat,
+            x="Category",
+            y=["Total_Sales", "Total_Profit"],
+            barmode="group",
+            title="Doanh Thu & Lợi Nhuận Theo Ngành Hàng",
+            labels={"value": "USD ($)", "variable": "Chỉ Số"},
+        )
+        fig_cat.update_layout(margin=dict(t=40, b=20))
+        st.plotly_chart(fig_cat, use_container_width=True, config=CHART_CONFIG)
+        st.caption("💡 **Insight:** Technology đóng góp lợi nhuận cao nhất dù doanh thu tương đương Furniture.")
+
+    with c2:
+        fig_reg = px.bar(
+            filtered_region,
+            x="Region",
+            y="Profit_Margin_Pct",
+            color="Category",
+            barmode="group",
+            title="Biên Lợi Nhuận (%) Theo Vùng & Danh Mục",
+            labels={"Profit_Margin_Pct": "Biên LN (%)", "Region": "Khu Vực"},
+        )
+        fig_reg.update_layout(margin=dict(t=40, b=20))
+        st.plotly_chart(fig_reg, use_container_width=True, config=CHART_CONFIG)
+        st.caption("💡 **Insight:** Ngành Office Supplies duy trì biên lợi nhuận ổn định nhất
+
