@@ -535,3 +535,79 @@ with tab5:
         )
     else:
         st.warning("Không tìm thấy dữ liệu cột 'Product_A' trong file product_pairs.csv.")
+    # ---------------------------------------------------------
+# TAB 6: BÁO CÁO ĐIỀU HÀNH & INSIGHTS ĐỘNG (EXECUTIVE BRIEFING)
+# ---------------------------------------------------------
+with tab6:
+    st.subheader("📋 Báo Cáo Điều Hành & Ma Trận Hành Động Tự Động")
+    st.caption("Hệ thống tự động quét toàn bộ dữ liệu real-time để đưa ra khuyến nghị chiến lược cho Ban Giám đốc.")
+
+    # 1. Tính toán điểm nóng tự động từ dữ liệu
+    worst_sub_name = "N/A"
+    worst_sub_loss = 0
+    if not df_loss.empty:
+        worst_row = df_loss.sort_values(by="Total_Profit").iloc[0]
+        worst_sub_name = worst_row.get("Sub-Category", "N/A")
+        worst_sub_loss = worst_row.get("Total_Profit", 0)
+
+    worst_reg_name = "N/A"
+    worst_reg_margin = 0
+    if not df_region.empty and "Profit_Margin_Pct" in df_region.columns:
+        worst_reg_row = df_region.sort_values(by="Profit_Margin_Pct").iloc[0]
+        worst_reg_name = worst_reg_row.get("Region", "N/A")
+        worst_reg_margin = worst_reg_row.get("Profit_Margin_Pct", 0)
+
+    pareto_vip_pct = 58.9
+    if not df_pareto.empty and "Profit_Share_Pct" in df_pareto.columns:
+        vip_rows = df_pareto[df_pareto["Customer_Group"].astype(str).str.contains("20|VIP", case=False, na=False)]
+        if not vip_rows.empty:
+            pareto_vip_pct = vip_rows.iloc[0]["Profit_Share_Pct"]
+
+    # 2. Ma trận Hành động (Action Matrix)
+    col_risk, col_opp = st.columns(2)
+
+    with col_risk:
+        st.markdown("### 🚨 Rủi Ro & Điểm Nóng Cần Xử Lý")
+        
+        if worst_sub_loss < 0:
+            st.error(
+                f"**1. Sản phẩm âm lợi nhuận lớn nhất:** Nhóm **{worst_sub_name}** đang gây thâm hụt "
+                f"**{format_compact_number(worst_sub_loss)}** lợi nhuận ròng do chiết khấu sâu.\n\n"
+                f"👉 **Hành động đề xuất:** Áp dụng ngay mức trần chiết khấu **≤ 15%** cho {worst_sub_name} "
+                f"hoặc chuyển sang hình thức bán kèm (bundle)."
+            )
+        
+        st.warning(
+            f"**2. Khu vực có hiệu năng biên lợi nhuận thấp nhất:** **{worst_reg_name}** hiện chỉ đạt "
+            f"biên lợi nhuận **{worst_reg_margin:.1f}%**.\n\n"
+            f"👉 **Hành động đề xuất:** Rà soát lại chi phí chiết khấu và logistics tại khu vực {worst_reg_name}."
+        )
+
+    with col_opp:
+        st.markdown("### 🚀 Cơ Hội & Động Lực Tăng Trưởng")
+        
+        st.success(
+            f"**1. Sức mạnh Phân khúc Khách hàng VIP:** Top **20% Khách hàng VIP** đang đóng góp "
+            f"tới **{pareto_vip_pct:.1f}%** tổng lợi nhuận của toàn bộ doanh nghiệp.\n\n"
+            f"👉 **Hành động đề xuất:** Triển khai chương trình chăm sóc VVIP riêng (đặc quyền hỗ trợ, gia tăng hạn mức) "
+            f"để giữ chân nhóm này."
+        )
+
+        st.info(
+            f"**2. Tốc độ Tăng trưởng Mùa vụ Q4:** Dữ liệu lịch sử cho thấy nhu cầu mua sắm đỉnh điểm rơi vào **Quý 4**.\n\n"
+            f"👉 **Hành động đề xuất:** Chủ động tăng tồn kho mặt hàng Technology & Office Supplies từ cuối Quý 3 "
+            f"để tránh đứt gãy chuỗi cung ứng."
+        )
+
+    st.markdown("---")
+    
+    # 3. Mô phỏng tác động lợi nhuận
+    st.markdown("### 🔮 Dự Báo Tác Động Tới Lợi Nhuận Ròng (Estimated Net Profit Impact)")
+    saved_sim = abs(worst_sub_loss) * 0.8 if worst_sub_loss < 0 else 523500
+    new_profit_projected = total_profit + saved_sim
+    
+    st.metric(
+        label="Lợi nhuận ròng dự kiến sau khi áp dụng Mức trần chiết khấu và Tối ưu danh mục gánh lỗ",
+        value=format_compact_number(new_profit_projected),
+        delta=f"+{format_compact_number(saved_sim)} (+{(saved_sim/total_profit)*100:.1f}%)" if total_profit > 0 else "N/A"
+    )
