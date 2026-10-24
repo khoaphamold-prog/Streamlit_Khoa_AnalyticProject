@@ -370,18 +370,35 @@ with tab4:
 
     # Biểu đồ xu hướng doanh thu / lợi nhuận theo tháng
     if not df_monthly.empty:
-        time_col = df_monthly.columns[0]
-        value_cols = [c for c in df_monthly.columns if c != time_col]
-        fig_month = px.line(
-            df_monthly,
-            x=time_col,
-            y=value_cols,
-            title="Xu Hướng Biến Động Doanh Thu & Lợi Nhuận Theo Tháng",
-            markers=True,
-            labels={time_col: "Thời Gian", "value": "Giá Trị ($)", "variable": "Chỉ Số"}
-        )
-        fig_month.update_layout(margin=dict(t=40, b=20))
-        st.plotly_chart(fig_month, use_container_width=True)
+        df_month_plot = df_monthly.copy()
+        time_col = df_month_plot.columns[0]
+        
+        # 1. Làm sạch dữ liệu và chuyển về dạng số
+        for col in df_month_plot.columns:
+            if col != time_col:
+                if df_month_plot[col].dtype == 'object':
+                    df_month_plot[col] = (
+                        df_month_plot[col]
+                        .astype(str)
+                        .str.replace('$', '', regex=False)
+                        .str.replace(',', '', regex=False)
+                    )
+                df_month_plot[col] = pd.to_numeric(df_month_plot[col], errors='coerce')
+        
+        # 2. Chỉ lọc ra các cột kiểu số để truyền vào y
+        value_cols = df_month_plot.select_dtypes(include=['number']).columns.tolist()
+        
+        if value_cols:
+            fig_month = px.line(
+                df_month_plot,
+                x=time_col,
+                y=value_cols,
+                title="Xu Hướng Biến Động Doanh Thu & Lợi Nhuận Theo Tháng",
+                markers=True,
+                labels={time_col: "Thời Gian", "value": "Giá Trị ($)", "variable": "Chỉ Số"}
+            )
+            fig_month.update_layout(margin=dict(t=40, b=20))
+            st.plotly_chart(fig_month, use_container_width=True)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -408,6 +425,7 @@ with tab4:
         )
         fig_ship_margin.update_layout(margin=dict(t=40, b=20))
         st.plotly_chart(fig_ship_margin, use_container_width=True)
+
 
 # ---------------------------------------------------------
 # TAB 5: BÁN CHÉO (CROSS-SELLING)
